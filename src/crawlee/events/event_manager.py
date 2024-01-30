@@ -74,7 +74,7 @@ class EventManager:
             # If the listener is a coroutine function, just call it, otherwise, run it in a separate thread
             # to avoid blocking the event loop
             coro = listener(event_data) if iscoroutinefunction(listener) else asyncio.to_thread(listener, event_data)
-            listener_task = asyncio.create_task(coro, name=f'Task-{event.value}-{listener.__name__}')
+            listener_task = asyncio.create_task(coro, name=f'Task-{event}-{listener.__name__}')
             self._listener_tasks.add(listener_task)
 
             try:
@@ -83,14 +83,14 @@ class EventManager:
                 # We need to swallow the exception and just log it here, otherwise it could break the event emitter
                 logger.exception(
                     'Exception in the event listener',
-                    extra={'event_name': event.value, 'listener_name': listener.__name__},
+                    extra={'event_name': event, 'listener_name': listener.__name__},
                 )
             finally:
                 logger.debug('LocalEventManager.on.listener_wrapper(): Removing listener task from the set...')
                 self._listener_tasks.remove(listener_task)
 
         self._listeners_to_wrappers[event][listener].append(listener_wrapper)
-        self._event_emitter.add_listener(event.value, listener_wrapper)
+        self._event_emitter.add_listener(event, listener_wrapper)
 
     def off(self: EventManager, *, event: Event, listener: Listener | None = None) -> None:
         """Remove a listener, or all listeners, from an Actor event.
@@ -104,11 +104,11 @@ class EventManager:
 
         if listener:
             for listener_wrapper in self._listeners_to_wrappers[event][listener]:
-                self._event_emitter.remove_listener(event.value, listener_wrapper)
+                self._event_emitter.remove_listener(event, listener_wrapper)
             self._listeners_to_wrappers[event][listener] = []
         else:
             self._listeners_to_wrappers[event] = defaultdict(list)
-            self._event_emitter.remove_all_listeners(event.value)
+            self._event_emitter.remove_all_listeners(event)
 
     def emit(self: EventManager, *, event: Event, event_data: EventData) -> None:
         """Emit an event.
@@ -118,7 +118,7 @@ class EventManager:
             event_data: The data which will be passed to the event listeners.
         """
         logger.debug('Calling LocalEventManager.emit()...')
-        self._event_emitter.emit(event.value, event_data)
+        self._event_emitter.emit(event, event_data)
 
     async def wait_for_all_listeners_to_complete(self: EventManager, *, timeout: timedelta | None = None) -> None:
         """Wait for all currently executing event listeners to complete.

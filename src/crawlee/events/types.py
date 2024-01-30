@@ -2,21 +2,10 @@ from __future__ import annotations
 
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
-from enum import Enum
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any, Literal, Union
 
 if TYPE_CHECKING:
     from crawlee.autoscaling.system_status import SystemInfo
-
-
-class Event(Enum):
-    """Enum of all possible events that can be emitted."""
-
-    PERSIST_STATE = 'persistState'
-    SYSTEM_INFO = 'systemInfo'
-    MIGRATING = 'migrating'
-    ABORTING = 'aborting'
-    EXIT = 'exit'
 
 
 @dataclass
@@ -48,6 +37,7 @@ class EventExitData:
     """Data for the exit event."""
 
 
+Event = Literal['persist_state', 'system_info', 'migrating', 'aborting', 'exit']
 EventData = Union[EventPersistStateData, EventSystemInfoData, EventMigratingData, EventAbortingData, EventExitData]
 SyncListener = Callable[..., None]
 AsyncListener = Callable[..., Coroutine[Any, Any, None]]
