@@ -2,7 +2,8 @@ version = 1
 
 test_patterns = [
   "/tests/**",
-  "tests/**"
+  "tests/**",
+  "test/**"
 ]
 
 [[analyzers]]
