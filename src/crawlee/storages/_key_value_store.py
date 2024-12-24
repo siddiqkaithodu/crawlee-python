@@ -1,21 +1,23 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING, Any, ClassVar, TypeVar, overload
 
 from typing_extensions import override
 
+from crawlee import service_locator
 from crawlee._utils.docs import docs_group
-from crawlee.base_storage_client._models import KeyValueStoreKeyInfo, KeyValueStoreMetadata
 from crawlee.events._types import Event, EventPersistStateData
-from crawlee.storages._base_storage import BaseStorage
+from crawlee.storage_clients.models import KeyValueStoreKeyInfo, KeyValueStoreMetadata
+
+from ._base_storage import BaseStorage
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
     from crawlee._types import JsonSerializable
-    from crawlee.base_storage_client import BaseStorageClient
     from crawlee.configuration import Configuration
-    from crawlee.events._event_manager import EventManager
+    from crawlee.storage_clients import BaseStorageClient
 
 T = TypeVar('T')
 
@@ -59,19 +61,12 @@ class KeyValueStore(BaseStorage):
     _general_cache: ClassVar[dict[str, dict[str, dict[str, JsonSerializable]]]] = {}
     _persist_state_event_started = False
 
-    def __init__(
-        self,
-        id: str,
-        name: str | None,
-        configuration: Configuration,
-        client: BaseStorageClient,
-    ) -> None:
+    def __init__(self, id: str, name: str | None, storage_client: BaseStorageClient) -> None:
         self._id = id
         self._name = name
-        self._configuration = configuration
 
         # Get resource clients from storage client
-        self._resource_client = client.key_value_store(self._id)
+        self._resource_client = storage_client.key_value_store(self._id)
 
     @property
     @override
@@ -98,6 +93,9 @@ class KeyValueStore(BaseStorage):
         storage_client: BaseStorageClient | None = None,
     ) -> KeyValueStore:
         from crawlee.storages._creation_management import open_storage
+
+        configuration = configuration or service_locator.get_configuration()
+        storage_client = storage_client or service_locator.get_storage_client()
 
         return await open_storage(
             storage_class=cls,
@@ -185,7 +183,9 @@ class KeyValueStore(BaseStorage):
         return await self._resource_client.get_public_url(key)
 
     async def get_auto_saved_value(
-        self, key: str, default_value: dict[str, JsonSerializable] | None = None
+        self,
+        key: str,
+        default_value: dict[str, JsonSerializable] | None = None,
     ) -> dict[str, JsonSerializable]:
         """Gets a value from KVS that will be automatically saved on changes.
 
@@ -226,18 +226,12 @@ class KeyValueStore(BaseStorage):
         for key, value in self._cache.items():
             await self.set_value(key, value)
 
-    def _get_event_manager(self) -> EventManager:
-        """Get event manager from crawlee services."""
-        from crawlee.service_container import get_event_manager
-
-        return get_event_manager()  # type: ignore[no-any-return] # Mypy is broken
-
     def _ensure_persist_event(self) -> None:
         """Setup persist state event handling if not already done."""
         if self._persist_state_event_started:
             return
 
-        event_manager = self._get_event_manager()
+        event_manager = service_locator.get_event_manager()
         event_manager.on(event=Event.PERSIST_STATE, listener=self._persist_save)
         self._persist_state_event_started = True
 
@@ -248,7 +242,7 @@ class KeyValueStore(BaseStorage):
     def _drop_persist_state_event(self) -> None:
         """Off event_manager listener and drop event status."""
         if self._persist_state_event_started:
-            event_manager = self._get_event_manager()
+            event_manager = service_locator.get_event_manager()
             event_manager.off(event=Event.PERSIST_STATE, listener=self._persist_save)
         self._persist_state_event_started = False
 
